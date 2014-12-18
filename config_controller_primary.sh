@@ -211,3 +211,5 @@ else
                                                  playbooks/openstack/horizon-all.yml \
                                                  playbooks/openstack/utility-all.yml
 fi
+# let Heat know we are done
+curl -i -H 'Content-Type:' -X PUT --data-binary '{"status":"SUCCESS"}' '%%SIGNAL%%'

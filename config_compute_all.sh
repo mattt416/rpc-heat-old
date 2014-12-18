@@ -168,3 +168,5 @@ ifup -a
 pvcreate /dev/xvde1
 vgcreate cinder-volumes /dev/xvde1
 
+# let Heat know we are done
+curl -i -H 'Content-Type:' -X PUT --data-binary '{"status":"SUCCESS"}' '%%SIGNAL%%'

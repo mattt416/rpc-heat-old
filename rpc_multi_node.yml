@@ -115,6 +115,16 @@ resources:
       cidr: 172.29.228.0/22
       label: heat_storage
 
+  wch1:
+    type: "AWS::CloudFormation::WaitConditionHandle"
+
+  wc1:
+    type: "AWS::CloudFormation::WaitCondition"
+    properties:
+      Handle: { get_resource: wch1 }
+      Count: 1
+      Timeout: 10800
+
   controller1:
     type: "OS::Nova::Server"
     # Don't build controller1 until the others are up as the ansible run
@@ -156,6 +166,17 @@ resources:
             "%%RACKSPACE_CLOUD_USERNAME%%": { get_param: rackspace_cloud_username }
             "%%GLANCE_DEFAULT_STORE%%": { get_param: glance_default_store }
             "%%GLANCE_SWIFT_STORE_REGION%%": { get_param: glance_swift_store_region }
+            "%%SIGNAL%%": { get_attr: [wch1, endpoint] }
+
+  wch2:
+    type: "AWS::CloudFormation::WaitConditionHandle"
+
+  wc2:
+    type: "AWS::CloudFormation::WaitCondition"
+    properties:
+      Handle: { get_resource: wch2 }
+      Count: 1
+      Timeout: 10800
 
   controller2:
     type: "OS::Nova::Server"
@@ -183,6 +204,17 @@ resources:
             "%%ID%%": "2"
             "%%PUBLIC_KEY%%": { get_file: id_rsa.pub }
             "%%CLUSTER_PREFIX%%": { get_param: cluster_prefix }
+            "%%SIGNAL%%": { get_attr: [wch2, endpoint] }
+
+  wch3:
+    type: "AWS::CloudFormation::WaitConditionHandle"
+
+  wc3:
+    type: "AWS::CloudFormation::WaitCondition"
+    properties:
+      Handle: { get_resource: wch3 }
+      Count: 1
+      Timeout: 10800
 
   controller3:
     type: "OS::Nova::Server"
@@ -210,6 +242,17 @@ resources:
             "%%ID%%": "3"
             "%%PUBLIC_KEY%%": { get_file: id_rsa.pub }
             "%%CLUSTER_PREFIX%%": { get_param: cluster_prefix }
+            "%%SIGNAL%%": { get_attr: [wch3, endpoint] }
+
+  wch4:
+    type: "AWS::CloudFormation::WaitConditionHandle"
+
+  wc4:
+    type: "AWS::CloudFormation::WaitCondition"
+    properties:
+      Handle: { get_resource: wch4 }
+      Count: 1
+      Timeout: 10800
 
   compute1:
     type: "OS::Nova::Server"
@@ -237,6 +280,17 @@ resources:
             "%%ID%%": "4"
             "%%PUBLIC_KEY%%": { get_file: id_rsa.pub }
             "%%CLUSTER_PREFIX%%": { get_param: cluster_prefix }
+            "%%SIGNAL%%": { get_attr: [wch4, endpoint] }
+
+  wch5:
+    type: "AWS::CloudFormation::WaitConditionHandle"
+
+  wc5:
+    type: "AWS::CloudFormation::WaitCondition"
+    properties:
+      Handle: { get_resource: wch5 }
+      Count: 1
+      Timeout: 10800
 
   compute2:
     type: "OS::Nova::Server"
@@ -264,6 +318,7 @@ resources:
             "%%ID%%": "5"
             "%%PUBLIC_KEY%%": { get_file: id_rsa.pub }
             "%%CLUSTER_PREFIX%%": { get_param: cluster_prefix }
+            "%%SIGNAL%%": { get_attr: [wch5, endpoint] }
 
 outputs:
   controller1_ip:
