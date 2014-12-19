@@ -211,3 +211,5 @@ else
                                                  playbooks/infrastructure/rabbit-install.yml
   retry 3 ansible-playbook -e @${user_variables} playbooks/openstack/openstack-setup-no-logging.yml
 fi
+# let Heat know we are done
+curl -i -H 'Content-Type:' -X PUT --data-binary '{"status":"SUCCESS"}' '%%SIGNAL%%'
