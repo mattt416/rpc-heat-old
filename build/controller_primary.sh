@@ -1,7 +1,3 @@
-rpc_user_config="/etc/rpc_deploy/rpc_user_config.yml"
-swift_config="/etc/rpc_deploy/conf.d/swift.yml"
-user_variables="/etc/rpc_deploy/user_variables.yml"
-
 echo -n "%%PRIVATE_KEY%%" > .ssh/id_rsa
 chmod 600 .ssh/*
 
@@ -10,8 +6,22 @@ if [ ! -e /root/os-ansible-deployment ]; then
 fi
 
 cd os-ansible-deployment
+
+if [ -d etc/openstack_deploy ]; then
+  etc_dir="openstack_deploy"
+  rpc_user_config="/etc/${etc_dir}/openstack_user_config.yml"
+  rpc_environment="/etc/${etc_dir}/openstack_environment.yml"
+else
+  etc_dir="rpc_deploy"
+  rpc_user_config="/etc/${etc_dir}/rpc_user_config.yml"
+  rpc_environment="/etc/${etc_dir}/rpc_environment.yml"
+fi
+
+swift_config="/etc/${etc_dir}/conf.d/swift.yml"
+user_variables="/etc/${etc_dir}/user_variables.yml"
+
 pip install -r requirements.txt
-cp -a etc/rpc_deploy /etc/
+cp -a etc/${etc_dir}/ /etc/
 
 scripts/pw-token-gen.py --file $user_variables
 echo "nova_virt_type: qemu" >> $user_variables
@@ -34,7 +44,7 @@ else
   sed -i "s/\(glance_swift_store_region\): .*/\1: %%GLANCE_SWIFT_STORE_REGION%%/g" $user_variables
 fi
 
-environment_version=$(md5sum /etc/rpc_deploy/rpc_environment.yml | awk '{print $1}')
+environment_version=$(md5sum $rpc_environment | awk '{print $1}')
 
 # if %%HEAT_GIT_REPO%% has .git at end (https://github.com/mattt416/rpc_heat.git),
 # strip it off otherwise curl will 404
@@ -52,7 +62,6 @@ fi
 
 # here we create a separate script incase run_ansible paramater is false and
 # you want to re-run the correct set of playbooks at a later time
-cd rpc_deployment
 cat >> run_ansible.sh << "EOF"
 #!/bin/bash
 
@@ -75,7 +84,7 @@ function retry()
   done
 }
 
-user_variables=${user_variables:-"/etc/rpc_deploy/user_variables.yml"}
+user_variables=${user_variables:-"/etc/${etc_dir}/user_variables.yml"}
 
 timeout=$(($(date +%s) + 300))
 
@@ -86,44 +95,52 @@ until ansible hosts -m ping > /dev/null 2>&1; do
   fi
 done
 
-retry 3 ansible-playbook -e @${user_variables} playbooks/setup/host-setup.yml
-retry 3 ansible-playbook -e @${user_variables} playbooks/infrastructure/haproxy-install.yml
+if [ -d rpc_deployment ]; then
+  cd rpc_deployment
+  prefix="playbooks"
+else
+  cd playbooks
+  prefix="."
+fi
+
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/setup/host-setup.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/infrastructure/haproxy-install.yml
 EOF
 
 if [ $LOGGING_ENABLED -eq 1 ]; then
   cat >> run_ansible.sh << "EOF"
-retry 3 ansible-playbook -e @${user_variables} playbooks/infrastructure/infrastructure-setup.yml \
-                                               playbooks/openstack/openstack-setup.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/infrastructure/infrastructure-setup.yml \
+                                               ${prefix}/openstack/openstack-setup.yml
 EOF
 else
   cat >> run_ansible.sh << "EOF"
-egrep -v 'rpc-support-all.yml|rsyslog-config.yml' playbooks/openstack/openstack-setup.yml > \
-                                                  playbooks/openstack/openstack-setup-no-logging.yml
-retry 3 ansible-playbook -e @${user_variables} playbooks/infrastructure/memcached-install.yml \
-                                               playbooks/infrastructure/galera-install.yml \
-                                               playbooks/infrastructure/rabbit-install.yml
-retry 3 ansible-playbook -e @${user_variables} playbooks/openstack/openstack-setup-no-logging.yml
+egrep -v 'rpc-support-all.yml|rsyslog-config.yml' ${prefix}/openstack/openstack-setup.yml > \
+                                                  ${prefix}/openstack/openstack-setup-no-logging.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/infrastructure/memcached-install.yml \
+                                               ${prefix}/infrastructure/galera-install.yml \
+                                               ${prefix}/infrastructure/rabbit-install.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/openstack/openstack-setup-no-logging.yml
 EOF
 fi
 
 if [ $SWIFT_ENABLED -eq 1 ]; then
   cat >> run_ansible.sh << "EOF"
-retry 3 ansible-playbook -e @${user_variables} playbooks/openstack/swift-all.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/openstack/swift-all.yml
 EOF
 fi
 
 if [ $TEMPEST_ENABLED -eq 1 ]; then
   cat >> run_ansible.sh << "EOF"
-retry 3 ansible-playbook -e @${user_variables} playbooks/openstack/tempest.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/openstack/tempest.yml
 EOF
 fi
 
 if [ $MONITORING_ENABLED -eq 1 ]; then
   cat >> run_ansible.sh << "EOF"
-retry 3 ansible-playbook -e @${user_variables} playbooks/monitoring/raxmon-all.yml
-retry 3 ansible-playbook -e @${user_variables} playbooks/monitoring/maas_local.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/monitoring/raxmon-all.yml
+retry 3 ansible-playbook -e @${user_variables} ${prefix}/monitoring/maas_local.yml
 # We do not run these as remote checks fail due to self-signed SSL certificate
-#retry 3 ansible-playbook -e @${user_variables} playbooks/monitoring/maas_remote.yml
+#retry 3 ansible-playbook -e @${user_variables} ${prefix}/monitoring/maas_remote.yml
 EOF
 fi
 
