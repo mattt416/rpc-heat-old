@@ -191,9 +191,13 @@ cd os-ansible-deployment
 pip install -r requirements.txt
 cp -a etc/openstack_deploy /etc/
 
-scripts/pw-token-gen.py --file $user_variables
+scripts/pw-token-gen.py --file /etc/openstack_deploy/user_secrets.yml
 echo "nova_virt_type: qemu" >> $user_variables
 echo "lb_name: %%CLUSTER_PREFIX%%-node3" >> $user_variables
+# Temporary work-around otherwise we hit https://bugs.launchpad.net/neutron/+bug/1382064
+# which results in tempest tests failing
+echo "neutron_api_workers: 0" >> $user_variables
+echo "neutron_rpc_workers: 0" >> $user_variables
 
 sed -i "s#\(rackspace_cloud_auth_url\): .*#\1: %%RACKSPACE_CLOUD_AUTH_URL%%#g" $user_variables
 sed -i "s/\(rackspace_cloud_tenant_id\): .*/\1: %%RACKSPACE_CLOUD_TENANT_ID%%/g" $user_variables
@@ -203,7 +207,7 @@ sed -i "s/\(rackspace_cloud_api_key\): .*/\1: %%RACKSPACE_CLOUD_API_KEY%%/g" $us
 sed -i "s/\(glance_default_store\): .*/\1: %%GLANCE_DEFAULT_STORE%%/g" $user_variables
 sed -i "s/\(maas_notification_plan\): .*/\1: npTechnicalContactsEmail/g" $user_variables
 
-if [ "%%DEPLOY_SWIFT%%" = "True" ]; then
+if [ "%%DEPLOY_SWIFT%%" = "yes" ]; then
   sed -i "s/\(glance_swift_store_auth_address\): .*/\1: '{{ auth_identity_uri }}'/" $user_variables
   sed -i "s/\(glance_swift_store_key\): .*/\1: '{{ glance_service_password }}'/" $user_variables
   sed -i "s/\(glance_swift_store_region\): .*/\1: RegionOne/" $user_variables
@@ -223,21 +227,15 @@ sed -i "s/__ENVIRONMENT_VERSION__/$environment_version/g" $openstack_user_config
 sed -i "s/__EXTERNAL_VIP_IP__/%%EXTERNAL_VIP_IP%%/g" $openstack_user_config
 sed -i "s/__CLUSTER_PREFIX__/%%CLUSTER_PREFIX%%/g" $openstack_user_config
 
-if [ "%%DEPLOY_SWIFT%%" = "True" ]; then
+if [ "%%DEPLOY_SWIFT%%" = "yes" ]; then
   curl -o $swift_config "${raw_url}/%%HEAT_GIT_VERSION%%/swift.yml"
   sed -i "s/__CLUSTER_PREFIX__/%%CLUSTER_PREFIX%%/g" $swift_config
 fi
 
 # here we run ansible using the run-playbooks script in the ansible repo
 if [ "%%RUN_ANSIBLE%%" = "True" ]; then
-  # the run-playbooks script wants yes/no rather than true/false
-  for i in DEPLOY_LOGGING DEPLOY_INFRASTRUCTURE DEPLOY_OPENSTACK DEPLOY_SWIFT DEPLOY_TEMPEST; do
-      if [ "${i}" = "True" ]; then
-          "${i}" = "yes"
-      else "${i}" = "no"
-      fi
-  done
-  cd /root/os-ansible-deployment/scripts
-  ./run-playbooks.sh
+  cd /root/os-ansible-deployment
+  scripts/bootstrap-ansible.sh
+  scripts/run-playbooks.sh
 fi
 %%CURL_CLI%% --data-binary '{"status": "SUCCESS"}'
